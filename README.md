@@ -55,7 +55,7 @@ The pictures used by Windows Spotlight will also be contained in there. However,
 - A picture previously shown by Windows Spotlight might appear there again but with a different name
 - Pictures periodically disappear from there
 
-This program overcomes this limitations by:
+This program automates the process of obtaining just the pictures that you really want by:
 
 1. Scanning all files in that folder
 2. Comparing them with the ones in the destination folder (via MD5 checksums)
