@@ -1,15 +1,15 @@
 package main
 
 import (
+	"github.com/fernandreu/spotlight/pkg"
 	"os"
-	"spotlight/pkg"
 )
 
 func main() {
 	if len(os.Args) > 1 {
-		app.ProcessFiles(os.Args[1])
+		app.ProcessFiles(app.GetDefaultSpotlightFolder(), os.Args[1])
 	} else {
-		app.ProcessFiles(".\\")
+		app.ProcessFiles(app.GetDefaultSpotlightFolder(), ".\\")
 	}
 
 	app.Pause()

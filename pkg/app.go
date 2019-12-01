@@ -2,12 +2,11 @@ package app
 
 import (
 	"bufio"
-	"crypto/md5"
 	"fmt"
-	"image"
+	"github.com/fernandreu/spotlight/pkg/common"
+	"github.com/fernandreu/spotlight/pkg/img"
 	_ "image/jpeg"
 	_ "image/png"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -15,97 +14,12 @@ import (
 	"strings"
 )
 
-type ImageFile struct {
-	folder string
-	name   string
-	format string
-	width  int
-	height int
-}
-
-func (i *ImageFile) FullPath() string {
-	return filepath.Join(i.folder, i.name)
-}
-
-func (i *ImageFile) Hash() (string, int, error) {
-	b, err := ioutil.ReadFile(i.FullPath())
-	if err != nil {
-		return "", 0, err
-	}
-
-	return fmt.Sprintf("%x", md5.Sum(b)), len(b), nil
-}
-
-func (i *ImageFile) SaveAs(path string) error {
-	input, err := ioutil.ReadFile(i.FullPath())
-	if err != nil {
-		return err
-	}
-
-	err = ioutil.WriteFile(path, input, 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func parseImageFile(folder string, name string) *ImageFile {
-	fullPath := filepath.Join(folder, name)
-	file, err := os.Open(fullPath)
-	if err != nil {
-		return nil
-	}
-
-	defer tryCloseFile(file)
-
-	img, format, err := image.DecodeConfig(file) // format will be "jpeg", "png", etc.
-	if err != nil {
-		return nil
-	}
-
-	if img.Width < 1024 || img.Height < 768 || img.Width <= img.Height {
-		return nil
-	}
-
-	result := ImageFile{
-		folder: folder,
-		name:   name,
-		format: format,
-		width:  img.Width,
-		height: img.Height,
-	}
-
-	return &result
-}
-
-func listPictures(folder string) []ImageFile {
-	files, err := ioutil.ReadDir(folder)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var result []ImageFile
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-
-		file := parseImageFile(folder, f.Name())
-		if file != nil {
-			result = append(result, *file)
-		}
-	}
-
-	return result
-}
-
 // Reads a file with "name : hash" entries. Returns both a name->hash and a hash->name map
 func readCheckSumFile(path string) (map[string]string, map[string]string) {
 	filesByHash := make(map[string]string)
 	filesByName := make(map[string]string)
 	if file, err := os.Open(path); err == nil {
-		defer tryCloseFile(file)
+		defer common.TryCloseFile(file)
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			parts := strings.Split(scanner.Text(), ":")
@@ -127,19 +41,21 @@ func writeCheckSumFile(path string, filesByName map[string]string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer tryCloseFile(file)
+	defer common.TryCloseFile(file)
 
 	w := bufio.NewWriter(file)
-	defer tryFlush(w)
+	defer common.TryFlush(w)
 	for key, value := range filesByName {
 		_, _ = fmt.Fprintf(w, "%s : %s\n", key, value)
 	}
 }
 
-func ProcessFiles(destFolder string) {
+func GetDefaultSpotlightFolder() string {
 	const SubPath = "\\AppData\\Local\\Packages\\Microsoft.Windows.ContentDeliveryManager_cw5n1h2txyewy\\LocalState\\Assets\\"
-	originFolder := filepath.Join(os.Getenv("USERPROFILE"), SubPath)
+	return filepath.Join(os.Getenv("USERPROFILE"), SubPath)
+}
 
+func ProcessFiles(originFolder string, destFolder string) {
 	fmt.Printf("Copying all available Windows Spotlight pictures\n\n")
 	fmt.Printf("Origin folder:\n%s\n\n", originFolder)
 	fmt.Printf("Destination folder:\n%s\n\n", destFolder)
@@ -151,8 +67,8 @@ func ProcessFiles(destFolder string) {
 
 	// Scan all files in the destination folder in case there is a mismatch between the stored
 	// hashes and the actual files in the folder
-	for _, file := range listPictures(destFolder) {
-		_, ok := filesByName[file.name]
+	for _, file := range img.FindAll(destFolder) {
+		_, ok := filesByName[file.Name]
 		if ok {
 			continue
 		}
@@ -162,14 +78,14 @@ func ProcessFiles(destFolder string) {
 			continue
 		}
 
-		filesByName[file.name] = hash
-		filesByHash[hash] = file.name
+		filesByName[file.Name] = hash
+		filesByHash[hash] = file.Name
 	}
 
 	// Scan the origin folder now. Make sure the pictures are at least 1024x768, as there might be thumbnails or
 	// different versions of the same picture too
 	count := 0
-	for _, file := range listPictures(originFolder) {
+	for _, file := range img.FindAll(originFolder) {
 
 		hash, size, err := file.Hash()
 		if err != nil {
@@ -177,14 +93,14 @@ func ProcessFiles(destFolder string) {
 		}
 
 		if _, ok := filesByHash[hash]; !ok {
-			destName := file.name + "." + file.format
+			destName := file.Name + "." + file.Format
 			err = file.SaveAs(filepath.Join(destFolder, destName))
 			if err != nil {
 				log.Print(err)
 				continue
 			}
 
-			fmt.Printf("File copied: %s (%dx%d, %d kb)\n", destName, file.width, file.height, size/1024)
+			fmt.Printf("File copied: %s (%dx%d, %d kb)\n", destName, file.Width, file.Height, size/1024)
 			count += 1
 
 			filesByHash[hash] = destName
@@ -196,14 +112,6 @@ func ProcessFiles(destFolder string) {
 
 	// Write the full list of files and hashes back to the text file
 	writeCheckSumFile(checkSumFile, filesByName)
-}
-
-func tryCloseFile(f *os.File) {
-	_ = f.Close()
-}
-
-func tryFlush(w *bufio.Writer) {
-	_ = w.Flush()
 }
 
 /**
