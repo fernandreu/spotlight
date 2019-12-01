@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"os"
 	"spotlight/pkg"
 )
@@ -14,6 +12,5 @@ func main() {
 		app.ProcessFiles(".\\")
 	}
 
-	fmt.Print("Press 'Enter' to continue...")
-	_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
+	app.Pause()
 }

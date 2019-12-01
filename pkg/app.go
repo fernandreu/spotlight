@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -56,7 +57,7 @@ func parseImageFile(folder string, name string) *ImageFile {
 		return nil
 	}
 
-	defer tryClose(file)
+	defer tryCloseFile(file)
 
 	img, format, err := image.DecodeConfig(file) // format will be "jpeg", "png", etc.
 	if err != nil {
@@ -104,7 +105,7 @@ func readCheckSumFile(path string) (map[string]string, map[string]string) {
 	filesByHash := make(map[string]string)
 	filesByName := make(map[string]string)
 	if file, err := os.Open(path); err == nil {
-		defer tryClose(file)
+		defer tryCloseFile(file)
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			parts := strings.Split(scanner.Text(), ":")
@@ -126,7 +127,7 @@ func writeCheckSumFile(path string, filesByName map[string]string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer tryClose(file)
+	defer tryCloseFile(file)
 
 	w := bufio.NewWriter(file)
 	defer tryFlush(w)
@@ -197,10 +198,25 @@ func ProcessFiles(destFolder string) {
 	writeCheckSumFile(checkSumFile, filesByName)
 }
 
-func tryClose(f *os.File) {
+func tryCloseFile(f *os.File) {
 	_ = f.Close()
 }
 
 func tryFlush(w *bufio.Writer) {
 	_ = w.Flush()
+}
+
+/**
+Uses the standard pause command in Windows to wait for any key. This is obviously specific to Windows, but the entire
+program is anyway
+*/
+func Pause() {
+	proc := exec.Command("cmd", "/C", "pause")
+	proc.Stdin = os.Stdin
+	proc.Stdout = os.Stdout
+	proc.Stderr = os.Stderr
+	err := proc.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
