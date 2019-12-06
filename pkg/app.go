@@ -55,8 +55,10 @@ func GetDefaultSpotlightFolder() string {
 	return filepath.Join(os.Getenv("USERPROFILE"), SubPath)
 }
 
-func ProcessFiles(originFolder string, destFolder string) {
+func ProcessFiles(originFolder string, destFolder string) []string {
 	fmt.Printf("Copying all available Windows Spotlight pictures\n\n")
+	originFolder, _ = filepath.Abs(originFolder)
+	destFolder, _ = filepath.Abs(destFolder)
 	fmt.Printf("Origin folder:\n%s\n\n", originFolder)
 	fmt.Printf("Destination folder:\n%s\n\n", destFolder)
 
@@ -82,6 +84,8 @@ func ProcessFiles(originFolder string, destFolder string) {
 		filesByHash[hash] = file.Name
 	}
 
+	result := make([]string, 0)
+
 	// Scan the origin folder now. Make sure the pictures are at least 1024x768, as there might be thumbnails or
 	// different versions of the same picture too
 	count := 0
@@ -94,24 +98,25 @@ func ProcessFiles(originFolder string, destFolder string) {
 
 		if _, ok := filesByHash[hash]; !ok {
 			destName := file.Name + "." + file.Format
-			err = file.SaveAs(filepath.Join(destFolder, destName))
+			destPath := filepath.Join(destFolder, destName)
+			err = file.SaveAs(destPath)
 			if err != nil {
 				log.Print(err)
 				continue
 			}
 
-			fmt.Printf("File copied: %s (%dx%d, %d kb)\n", destName, file.Width, file.Height, size/1024)
 			count += 1
+			fmt.Printf("Picture %d: %s (%dx%d, %d kb)\n", count, destName, file.Width, file.Height, size/1024)
 
 			filesByHash[hash] = destName
 			filesByName[destName] = hash
+			result = append(result, destPath)
 		}
 	}
 
-	fmt.Printf("Finished copying; %d new pictures found in total\n", count)
-
 	// Write the full list of files and hashes back to the text file
 	writeCheckSumFile(checkSumFile, filesByName)
+	return result
 }
 
 /**
@@ -121,10 +126,27 @@ program is anyway
 func Pause() {
 	proc := exec.Command("cmd", "/C", "pause")
 	proc.Stdin = os.Stdin
-	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
 	err := proc.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = proc.Wait()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func OpenFile(path string) {
+	proc := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path)
+	proc.Stdin = os.Stdin
+	proc.Stderr = os.Stderr
+	err := proc.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Without waiting, only one picture may appear
+	_ = proc.Wait()
 }
