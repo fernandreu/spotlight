@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/fernandreu/spotlight/pkg"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -15,11 +16,16 @@ func main() {
 	}
 
 	if len(files) > 0 {
-		for _, file := range files {
-			app.OpenFile(file)
+		var answer string
+		fmt.Print("Do you want to open the copied pictures (y/[n])? ")
+		_, err := fmt.Scanf("%s", &answer)
+		if err != nil && strings.ToUpper(answer) == "Y" {
+			for _, file := range files {
+				app.OpenFile(file)
+			}
 		}
+	} else {
+		fmt.Print("No new pictures found. Press any key to exit the program...")
+		app.Pause()
 	}
-
-	fmt.Print("Press any key to exit the program...")
-	app.Pause()
 }
