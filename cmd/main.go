@@ -16,10 +16,10 @@ func main() {
 	}
 
 	if len(files) > 0 {
-		var answer string
 		fmt.Print("Do you want to open the copied pictures (y/[n])? ")
+		var answer string
 		_, err := fmt.Scanf("%s", &answer)
-		if err != nil && strings.ToUpper(answer) == "Y" {
+		if err == nil && strings.ToUpper(answer) == "Y" {
 			for _, file := range files {
 				app.OpenFile(file)
 			}
