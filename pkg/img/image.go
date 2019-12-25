@@ -19,6 +19,17 @@ type ImageFile struct {
 	Height int
 }
 
+func (i *ImageFile) clone() ImageFile {
+	result := ImageFile{
+		Folder: i.Folder,
+		Name:   i.Name,
+		Format: i.Format,
+		Width:  i.Width,
+		Height: i.Height,
+	}
+	return result
+}
+
 func (i *ImageFile) FullPath() string {
 	return filepath.Join(i.Folder, i.Name)
 }
@@ -32,17 +43,31 @@ func (i *ImageFile) Hash() (string, int, error) {
 	return fmt.Sprintf("%x", md5.Sum(b)), len(b), nil
 }
 
-func (i *ImageFile) SaveAs(path string) error {
+func (i *ImageFile) SaveAs(folder string, name string) (*ImageFile, error) {
 	input, err := ioutil.ReadFile(i.FullPath())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	path := filepath.Join(folder, name)
 	err = ioutil.WriteFile(path, input, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	result := i.clone()
+	result.Folder = folder
+	result.Name = name
+	return &result, nil
+}
+
+func (i *ImageFile) Rename(name string) error {
+	err := os.Rename(i.FullPath(), filepath.Join(i.Folder, name))
 	if err != nil {
 		return err
 	}
 
+	i.Name = name
 	return nil
 }
 

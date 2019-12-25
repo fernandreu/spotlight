@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"github.com/fernandreu/spotlight/pkg/common"
 	"github.com/fernandreu/spotlight/pkg/img"
@@ -13,6 +14,50 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+type Options struct {
+	Source      string
+	Destination string
+	ShowGui     bool
+	Prompt      bool
+}
+
+type ProcessResult struct {
+	Origin        string
+	Destination   string
+	OriginalFiles []img.ImageFile
+	NewFiles      []img.ImageFile
+}
+
+func ParseFlags() Options {
+	result := Options{}
+
+	source := flag.String(
+		"source",
+		GetDefaultSpotlightFolder(),
+		"The directory from where the Windows Spotlight pictures will be taken")
+	destination := flag.String(
+		"destination",
+		".\\",
+		"The destination where pictures will be stored")
+	noGui := flag.Bool(
+		"nogui",
+		false,
+		"Whether to use the command line instead of the GUI")
+	promptView := flag.Bool(
+		"prompt",
+		true,
+		"Show a prompt to view new pictures. Only applicable via command line")
+
+	flag.Parse()
+
+	result.Source = *source
+	result.Destination = *destination
+	result.ShowGui = !(*noGui)
+	result.Prompt = *promptView
+
+	return result
+}
 
 // Reads a file with "name : hash" entries. Returns both a name->hash and a hash->name map
 func readCheckSumFile(path string) (map[string]string, map[string]string) {
@@ -55,17 +100,28 @@ func GetDefaultSpotlightFolder() string {
 	return filepath.Join(os.Getenv("USERPROFILE"), SubPath)
 }
 
-func ProcessFiles(originFolder string, destFolder string) []string {
+func ProcessFiles(originFolder string, destFolder string) ProcessResult {
 	fmt.Printf("Copying all available Windows Spotlight pictures\n\n")
 	originFolder, _ = filepath.Abs(originFolder)
 	destFolder, _ = filepath.Abs(destFolder)
 	fmt.Printf("Origin folder:\n%s\n\n", originFolder)
 	fmt.Printf("Destination folder:\n%s\n\n", destFolder)
 
+	result := ProcessResult{
+		Origin:      originFolder,
+		Destination: destFolder,
+	}
+
 	// Read the Hash checksum of the existing files from a "CheckSums.txt" file in the same folder,
 	// if it exists. File is simply stored as "filename : hash" on each line
 	checkSumFile := filepath.Join(destFolder, "CheckSums.txt")
 	filesByName, filesByHash := readCheckSumFile(checkSumFile)
+	for name := range filesByName {
+		file := img.Parse(destFolder, name)
+		if file != nil {
+			result.OriginalFiles = append(result.OriginalFiles, *file)
+		}
+	}
 
 	// Scan all files in the destination folder in case there is a mismatch between the stored
 	// hashes and the actual files in the folder
@@ -80,11 +136,11 @@ func ProcessFiles(originFolder string, destFolder string) []string {
 			continue
 		}
 
+		result.OriginalFiles = append(result.OriginalFiles, file)
+
 		filesByName[file.Name] = hash
 		filesByHash[hash] = file.Name
 	}
-
-	result := make([]string, 0)
 
 	// Scan the origin folder now. Make sure the pictures are at least 1024x768, as there might be thumbnails or
 	// different versions of the same picture too
@@ -98,8 +154,7 @@ func ProcessFiles(originFolder string, destFolder string) []string {
 
 		if _, ok := filesByHash[hash]; !ok {
 			destName := file.Name + "." + file.Format
-			destPath := filepath.Join(destFolder, destName)
-			err = file.SaveAs(destPath)
+			copied, err := file.SaveAs(destFolder, destName)
 			if err != nil {
 				log.Print(err)
 				continue
@@ -110,7 +165,9 @@ func ProcessFiles(originFolder string, destFolder string) []string {
 
 			filesByHash[hash] = destName
 			filesByName[destName] = hash
-			result = append(result, destPath)
+
+			// Adapt file to new file name / location
+			result.NewFiles = append(result.NewFiles, *copied)
 		}
 	}
 
